@@ -1,0 +1,65 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Switchboard — Shopify Cloud Platform service manifest (TEMPLATE)
+#
+# ⚠️  VERIFY BEFORE USE: the exact services.yml schema is internal and evolves.
+#     Reconcile the field names/structure below against current cloudplatform docs
+#     (#cloudplatform) or a sibling service's services.yml, then move this file to
+#     the REPO ROOT (cloudplatform looks for ./services.yml). It lives under deploy/
+#     here so it isn't mistaken for verified config.
+#
+# Intent this must express, however the schema spells it:
+#   • long-lived HTTP web service (NOT a job/cron) built from the Dockerfile
+#   • container listens on $PORT (3000); public HTTPS route so Slack can POST
+#   • readiness/liveness probes hit GET /health
+#   • SWITCHBOARD_SOCKET_MODE=false in production (HTTP mode)
+#   • secrets injected from the platform secret store — NEVER inlined here
+# ─────────────────────────────────────────────────────────────────────────────
+
+name: switchboard
+# owner: <your-team-slug>            # team that owns/pages for this service
+description: "/switchboard Slack slash command — who owns this, where do I ask?"
+
+production:
+  # ── the web container ──────────────────────────────────────────────────────
+  web:
+    build:
+      dockerfile: Dockerfile
+    command: ["node", "dist/server.js"]
+    port: 3000
+    replicas: 2                       # ≥2 so a rolling deploy keeps answering Slack
+    resources:
+      cpu: "250m"
+      memory: "256Mi"
+
+    # ── HTTP ingress ──────────────────────────────────────────────────────────
+    # Slack Request URL (slash command + interactivity) = https://<this-host>/slack/events
+    ingress:
+      public: true
+      health_check:
+        path: /health
+        port: 3000
+
+    # ── non-secret env ─────────────────────────────────────────────────────────
+    env:
+      NODE_ENV: production
+      SWITCHBOARD_SOCKET_MODE: "false"
+      PORT: "3000"
+      SLACK_COMMAND: "/switchboard"
+      LLM_MODEL: "gpt-5.4"
+      LLM_TIMEOUT_MS: "20000"
+      BIGQUERY_LOCATION: "US"
+      BIGQUERY_MAX_BYTES_BILLED: "50000000000"
+      STORE_BACKEND: "file"           # see DEPLOY.md — file store is ephemeral per-pod
+      STORE_FILE_PATH: "/data"
+      SHARED_CACHE_TTL_MS: "60000"
+      LOG_LEVEL: "info"
+
+    # ── secrets (names are illustrative — wire to the platform secret manager) ──
+    # In HTTP mode SLACK_APP_TOKEN is not needed; SLACK_SIGNING_SECRET IS.
+    secrets:
+      - SLACK_BOT_TOKEN
+      - SLACK_SIGNING_SECRET
+      - LLM_BASE_URL
+      - LLM_API_KEY
+      - BIGQUERY_PROJECT_ID
+      - GOOGLE_APPLICATION_CREDENTIALS   # mount the SA key as a file + point this at its path
