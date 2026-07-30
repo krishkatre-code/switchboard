@@ -168,15 +168,3 @@ tests/                   pure-fn units + SQL snapshots
 reference/index.html     READ-ONLY source of truth (gitignored, internal source)
 ```
 
-## Security notes
-
-- **Never commit secrets.** `.env`, `data/`, `*-sa.json`, and `reference/` are gitignored.
-  Use a platform secret manager for the deployed service.
-- **`reference/index.html` is internal, IAP-protected source** — kept locally for parity, not
-  for publishing.
-- **Shared service account vs. per-user:** the web app queries BigQuery *as the logged-in
-  user*; this service uses one service account, which removes per-user access scoping. Queries
-  are metadata-only, but request **least-privilege read** on exactly the datasets above and
-  audit-log `{user_id, query, ts}`. **Flag for data/security review before go-live.**
-- LLM calls use `maxRetries:0` + a timeout, and every pipeline stage keeps its heuristic
-  fallback, so a gateway or BigQuery outage degrades gracefully instead of hanging.
